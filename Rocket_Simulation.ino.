@@ -1,103 +1,155 @@
 
 #include <Adafruit_LiquidCrystal.h>
-
-// ENGR 2304 - Programming Assignment 09
-// Compressor Pressure and Rocket Countdown
+#include <stdlib.h>
 
 Adafruit_LiquidCrystal lcd(0);
 
-// Professor's original LED pins
 int leds[] = {13, 12, 8, 4};
+const int pressureDial = A0;
 
-// Pressure system
-int pressureDial = A0;
 int targetPressure = 0;
 int currentPressure = 0;
 
+bool started = false;
 bool finished = false;
 
-// Display binary numbers using professor's LED code
-void showBinary(int count) {
+String input = "";
+unsigned long lastInputTime = 0;
+
+void showBinary(int number) {
   for (int i = 0; i < 4; i++) {
-    digitalWrite(leds[i], bitRead(count, i));
+    digitalWrite(leds[i], bitRead(number, i));
   }
+}
+
+void displayPressure() {
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Target: ");
+  lcd.print(targetPressure);
+
+  lcd.setCursor(0, 1);
+  lcd.print("Current: ");
+  lcd.print(currentPressure);
+}
+
+void startCountdown() {
+  lcd.clear();
+  lcd.print("Target Reached!");
+  delay(1500);
+
+  for (int count = 10; count >= 0; count--) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Rocket Count:");
+    lcd.setCursor(0, 1);
+    lcd.print(count);
+
+    showBinary(count);
+    delay(1000);
+  }
+
+  lcd.clear();
+  lcd.print("SIM COMPLETE");
+  showBinary(0);
+  finished = true;
+}
+
+void processInput() {
+  input.trim();
+
+  if (input.length() == 0) {
+    targetPressure = map(analogRead(pressureDial),
+                         0, 1023, 0, 100);
+    started = true;
+    return;
+  }
+
+  int base = 2;
+  if (input.startsWith("0x") ||
+      input.startsWith("0X")) {
+    base = 16;
+  }
+
+  char buffer[32];
+  input.toCharArray(buffer, sizeof(buffer));
+
+  char *endPtr;
+  long value = strtol(buffer, &endPtr, base);
+
+  if (endPtr != buffer &&
+      *endPtr == '\0' &&
+      value >= 0 && value <= 100) {
+    targetPressure = value;
+    started = true;
+
+    Serial.print("Target set to ");
+    Serial.print(targetPressure);
+    Serial.println(" PSI");
+  } else {
+    Serial.println("Invalid input. Try 10100 or 0x14.");
+  }
+
+  input = "";
 }
 
 void setup() {
   Serial.begin(9600);
 
-  // Initialize LEDs
   for (int i = 0; i < 4; i++) {
     pinMode(leds[i], OUTPUT);
   }
 
-  // Initialize LCD
   lcd.begin(16, 2);
   lcd.setBacklight(1);
 
   lcd.print("Rocket System");
-  delay(1500);
+  delay(1000);
   lcd.clear();
 
-  // Read target pressure from working A0 dial
-  targetPressure = map(analogRead(pressureDial),
-                       0, 1023, 0, 100);
+  Serial.println("Enter binary or hex pressure.");
+  Serial.println("Example: 10100 or 0x14");
 }
 
 void loop() {
-  if (finished) {
+  if (finished) return;
+
+  if (!started) {
+    while (Serial.available() > 0) {
+      char c = Serial.read();
+
+      if (c == '\n' || c == '\r') {
+        if (input.length() > 0) {
+          processInput();
+        }
+      } else {
+        input += c;
+        lastInputTime = millis();
+      }
+    }
+
+    // Process input even without newline
+    if (!started && input.length() > 0 &&
+        millis() - lastInputTime > 200) {
+      processInput();
+    }
+
+    lcd.setCursor(0, 0);
+    lcd.print("Enter Pressure  ");
+    lcd.setCursor(0, 1);
+    lcd.print("Serial Monitor  ");
     return;
   }
 
-  // Simulate compressor increasing pressure
   if (currentPressure < targetPressure) {
     currentPressure++;
   }
 
-  // Display pressure
-  lcd.setCursor(0, 0);
-  lcd.print("Target: ");
-  lcd.print(targetPressure);
-  lcd.print("    ");
-
-  lcd.setCursor(0, 1);
-  lcd.print("Current: ");
-  lcd.print(currentPressure);
-  lcd.print("    ");
-
-  // Show pressure in Serial Monitor
-  Serial.print("Target: ");
-  Serial.print(targetPressure);
-  Serial.print(" PSI | Current: ");
-  Serial.println(currentPressure);
-
+  displayPressure();
   delay(500);
 
-  // Start rocket countdown at target pressure
   if (currentPressure >= targetPressure) {
-    lcd.clear();
-    lcd.print("Target Reached!");
-    delay(1500);
-
-    for (int count = 10; count >= 0; count--) {
-      lcd.clear();
-
-      lcd.setCursor(0, 0);
-      lcd.print("Rocket Countdown");
-
-      lcd.setCursor(0, 1);
-      lcd.print(count);
-
-      // Professor's original binary LED logic
-      showBinary(count);
-
-      delay(1000);
-    }
-
-    lcd.clear();
-    lcd.print("SIM COMPLETE");
-
-    showBinary(0);
-    finished = true;
+    startCountdown();
   }
 }
+
