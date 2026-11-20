@@ -1,24 +1,28 @@
-
 # ENGR 2304 - P09 Rocket Launch Simulation
 
 ## Description
-This project simulates a rocket launch using an Arduino Uno in Tinkercad. The system increases compressor pressure until the target is reached, then begins a countdown.
+This project simulates a rocket launch system using an Arduino Uno in Tinkercad. The system increases compressor pressure to a specified target before initiating a rocket countdown.
 
 ## Features
-- **Pressure:** Set target pressure (0–100 PSI) using the A0 potentiometer.
-- **Compressor:** Automatically simulates increasing pressure.
-- **LCD:** Displays target pressure, current pressure, and countdown.
-- **LEDs:** Four LEDs display the countdown in binary from 10 to 0.
-- **Completion:** Displays "SIM COMPLETE" when finished.
+- **Pressure Input:** Accepts binary (`10100`) or hexadecimal (`0x14`) values through Serial Monitor.
+- **Compressor:** Automatically simulates pressure increasing to the target.
+- **LCD:** Displays pressure readings and countdown.
+- **LEDs:** Four LEDs display countdown numbers in binary.
+- **Completion:** Displays "SIM COMPLETE" after countdown.
 
 ## Components
-Arduino Uno, 16x2 I2C LCD, four LEDs, potentiometer, breadboard, and connecting wires.
+Arduino Uno, 16x2 I2C LCD, four LEDs, potentiometers, breadboard, and connecting wires.
 
 ## How to Run
-1. Open the Tinkercad project.
-2. Adjust the left potentiometer to set target pressure.
-3. Start the simulation.
-4. Wait for the pressure to reach the target and watch the countdown.
+1. Open the Tinkercad circuit and start the simulation.
+2. Open Serial Monitor and enter a binary or hexadecimal pressure value.
+3. Click Send and wait for the pressure to reach its target.
+4. Watch the countdown from 10 to 0.
+
+## Input Examples
+- `10100` = 20 PSI (binary)
+- `0x14` = 20 PSI (hexadecimal)
+- `1010` = 10 PSI (binary)
 
 ## Limitations
-The compressor is simulated automatically. The second potentiometer and binary/hexadecimal pressure input are not yet implemented.
+Compressor pressure is simulated automatically rather than measured using the second potentiometer.
