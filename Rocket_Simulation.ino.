@@ -1,0 +1,103 @@
+
+#include <Adafruit_LiquidCrystal.h>
+
+// ENGR 2304 - Programming Assignment 09
+// Compressor Pressure and Rocket Countdown
+
+Adafruit_LiquidCrystal lcd(0);
+
+// Professor's original LED pins
+int leds[] = {13, 12, 8, 4};
+
+// Pressure system
+int pressureDial = A0;
+int targetPressure = 0;
+int currentPressure = 0;
+
+bool finished = false;
+
+// Display binary numbers using professor's LED code
+void showBinary(int count) {
+  for (int i = 0; i < 4; i++) {
+    digitalWrite(leds[i], bitRead(count, i));
+  }
+}
+
+void setup() {
+  Serial.begin(9600);
+
+  // Initialize LEDs
+  for (int i = 0; i < 4; i++) {
+    pinMode(leds[i], OUTPUT);
+  }
+
+  // Initialize LCD
+  lcd.begin(16, 2);
+  lcd.setBacklight(1);
+
+  lcd.print("Rocket System");
+  delay(1500);
+  lcd.clear();
+
+  // Read target pressure from working A0 dial
+  targetPressure = map(analogRead(pressureDial),
+                       0, 1023, 0, 100);
+}
+
+void loop() {
+  if (finished) {
+    return;
+  }
+
+  // Simulate compressor increasing pressure
+  if (currentPressure < targetPressure) {
+    currentPressure++;
+  }
+
+  // Display pressure
+  lcd.setCursor(0, 0);
+  lcd.print("Target: ");
+  lcd.print(targetPressure);
+  lcd.print("    ");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Current: ");
+  lcd.print(currentPressure);
+  lcd.print("    ");
+
+  // Show pressure in Serial Monitor
+  Serial.print("Target: ");
+  Serial.print(targetPressure);
+  Serial.print(" PSI | Current: ");
+  Serial.println(currentPressure);
+
+  delay(500);
+
+  // Start rocket countdown at target pressure
+  if (currentPressure >= targetPressure) {
+    lcd.clear();
+    lcd.print("Target Reached!");
+    delay(1500);
+
+    for (int count = 10; count >= 0; count--) {
+      lcd.clear();
+
+      lcd.setCursor(0, 0);
+      lcd.print("Rocket Countdown");
+
+      lcd.setCursor(0, 1);
+      lcd.print(count);
+
+      // Professor's original binary LED logic
+      showBinary(count);
+
+      delay(1000);
+    }
+
+    lcd.clear();
+    lcd.print("SIM COMPLETE");
+
+    showBinary(0);
+    finished = true;
+  }
+}
