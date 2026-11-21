@@ -1,20 +1,30 @@
-
 #include <Adafruit_LiquidCrystal.h>
 #include <stdlib.h>
+#include <string.h>
 
 Adafruit_LiquidCrystal lcd(0);
 
-int leds[] = {13, 12, 8, 4};
-const int pressureDial = A0;
+int leds[] = {0b1101, 0b1100, 0b1000, 0b100};   // pins 13, 12, 8, 4
+const int targetDial   = A0;                    // target pressure dial
+const int pressureDial = A2;                    // simulated compressor pressure dial
+const int compressor   = 0b111;                 // pin 7: compressor LED
 
-int targetPressure = 0;
+const int MAX_PSI = 0b1100100;                  // 100
+const int ADC_MAX = 0b1111111111;               // 1023
+
+int targetPressure  = 0;
 int currentPressure = 0;
 
-bool started = false;
+bool started  = false;
 bool finished = false;
 
-String input = "";
+char input[32];                                 // typed text (no String, saves memory)
+byte inputLen = 0;
 unsigned long lastInputTime = 0;
+
+int readPsi(int pin) {
+  return map(analogRead(pin), 0, ADC_MAX, 0, MAX_PSI);
+}
 
 void showBinary(int number) {
   for (int i = 0; i < 4; i++) {
@@ -23,22 +33,26 @@ void showBinary(int number) {
 }
 
 void displayPressure() {
-  lcd.clear();
+  // no lcd.clear() here: overwrite with spaces so the screen does not flicker
   lcd.setCursor(0, 0);
   lcd.print("Target: ");
   lcd.print(targetPressure);
+  lcd.print("   ");
 
   lcd.setCursor(0, 1);
   lcd.print("Current: ");
   lcd.print(currentPressure);
+  lcd.print("   ");
 }
 
 void startCountdown() {
+  digitalWrite(compressor, LOW);
+
   lcd.clear();
   lcd.print("Target Reached!");
-  delay(1500);
+  delay(0b10111011100);                         // 1500 ms
 
-  for (int count = 10; count >= 0; count--) {
+  for (int count = 0b1010; count >= 0; count--) {   // 10 down to 0
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Rocket Count:");
@@ -46,7 +60,7 @@ void startCountdown() {
     lcd.print(count);
 
     showBinary(count);
-    delay(1000);
+    delay(0b1111101000);                        // 1000 ms
   }
 
   lcd.clear();
@@ -56,81 +70,90 @@ void startCountdown() {
 }
 
 void processInput() {
-  input.trim();
+  input[inputLen] = '\0';
 
-  if (input.length() == 0) {
-    targetPressure = map(analogRead(pressureDial),
-                         0, 1023, 0, 100);
-    started = true;
-    return;
-  }
+  // trim spaces at both ends
+  char *s = input;
+  while (*s == ' ') s++;
+  int n = strlen(s);
+  while (n > 0 && s[n - 1] == ' ') s[--n] = '\0';
 
-  int base = 2;
-  if (input.startsWith("0x") ||
-      input.startsWith("0X")) {
-    base = 16;
-  }
-
-  char buffer[32];
-  input.toCharArray(buffer, sizeof(buffer));
-
-  char *endPtr;
-  long value = strtol(buffer, &endPtr, base);
-
-  if (endPtr != buffer &&
-      *endPtr == '\0' &&
-      value >= 0 && value <= 100) {
-    targetPressure = value;
-    started = true;
-
-    Serial.print("Target set to ");
-    Serial.print(targetPressure);
-    Serial.println(" PSI");
+  if (n == 1 && (s[0] == 'd' || s[0] == 'D')) {
+    // use the target dial
+    targetPressure = readPsi(targetDial);
+    if (targetPressure > 0) {
+      started = true;
+      Serial.print("Target from dial: ");
+      Serial.print(targetPressure);
+      Serial.println(" PSI");
+    } else {
+      Serial.println("Dial is at 0. Turn it up and type d again.");
+    }
   } else {
-    Serial.println("Invalid input. Try 10100 or 0x14.");
+    int base = 2;                               // default is binary
+    if (n > 1 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+      base = 16;                                // strtol accepts the 0x prefix
+    } else if (n > 1 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
+      s += 2;                                   // skip 0b prefix
+    }
+
+    char *endPtr;
+    long value = strtol(s, &endPtr, base);
+
+    if (endPtr != s && *endPtr == '\0' && value > 0 && value <= MAX_PSI) {
+      targetPressure = value;
+      started = true;
+
+      Serial.print("Target set to ");
+      Serial.print(targetPressure);
+      Serial.println(" PSI");
+    } else {
+      Serial.println("Invalid input. Try 10100, 0b10100, 0x14, or d.");
+    }
   }
 
-  input = "";
+  inputLen = 0;
 }
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(0b10010110000000);               // 9600 baud
 
   for (int i = 0; i < 4; i++) {
     pinMode(leds[i], OUTPUT);
   }
+  pinMode(compressor, OUTPUT);
+  digitalWrite(compressor, LOW);
 
-  lcd.begin(16, 2);
+  lcd.begin(0b10000, 0b10);                     // 16 x 2
   lcd.setBacklight(1);
 
   lcd.print("Rocket System");
-  delay(1000);
+  delay(0b1111101000);                          // 1000 ms
   lcd.clear();
 
-  Serial.println("Enter binary or hex pressure.");
-  Serial.println("Example: 10100 or 0x14");
+  Serial.println("Enter target pressure (1-100 psi):");
+  Serial.println("  binary: 10100 or 0b10100, hex: 0x14, or d for dial");
 }
 
 void loop() {
   if (finished) return;
 
   if (!started) {
-    while (Serial.available() > 0) {
+    while (Serial.available() > 0 && !started) {
       char c = Serial.read();
 
       if (c == '\n' || c == '\r') {
-        if (input.length() > 0) {
+        if (inputLen > 0) {
           processInput();
         }
-      } else {
-        input += c;
+      } else if (inputLen < sizeof(input) - 1) {
+        input[inputLen++] = c;
         lastInputTime = millis();
       }
     }
 
-    // Process input even without newline
-    if (!started && input.length() > 0 &&
-        millis() - lastInputTime > 200) {
+    // process input even without newline
+    if (!started && inputLen > 0 && millis() - lastInputTime > 0b11001000) {  // 200 ms
       processInput();
     }
 
@@ -141,15 +164,15 @@ void loop() {
     return;
   }
 
-  if (currentPressure < targetPressure) {
-    currentPressure++;
-  }
-
+  // regulate the compressor using the simulated pressure dial
+  currentPressure = readPsi(pressureDial);
   displayPressure();
-  delay(500);
 
-  if (currentPressure >= targetPressure) {
-    startCountdown();
+  if (currentPressure < targetPressure) {
+    digitalWrite(compressor, HIGH);             // pressure too low: compressor ON
+  } else {
+    startCountdown();                           // target reached: compressor OFF + countdown
   }
-}
 
+  delay(0b1100100);                             // 100 ms
+}
